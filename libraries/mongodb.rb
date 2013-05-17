@@ -50,7 +50,13 @@ class Chef::ResourceDefinitionList::MongoDB
     rs_members = []
     members.each_index do |n|
       port = members[n]['mongodb']['port']
-      rs_members << {"_id" => n, "host" => "#{members[n]['fqdn']}:#{port}"}
+      rs_members << {
+        "_id" => n, 
+        "host" => "#{members[n]['fqdn']}:#{port}",
+        "votes" => members[n]['mongodb']['votes'], 
+        "hidden" => members[n]['mongodb']['hidden'],
+        "priority" => members[n]['mongodb']['priority']
+      }
     end
 
     
@@ -61,7 +67,13 @@ class Chef::ResourceDefinitionList::MongoDB
     rs_member_ips = []
     members.each_index do |n|
       port = members[n]['mongodb']['port']
-      rs_member_ips << {"_id" => n, "host" => "#{members[n]['ipaddress']}:#{port}"}
+      rs_member_ips << {
+        "_id" => n, 
+        "host" => "#{members[n]['ipaddress']}:#{port}",
+        "votes" => members[n]['mongodb']['votes'], 
+        "hidden" => members[n]['mongodb']['hidden'],
+        "priority" => members[n]['mongodb']['priority']
+      }
     end
     
     admin = connection['admin']
@@ -101,7 +113,7 @@ class Chef::ResourceDefinitionList::MongoDB
         config['members'].collect!{ |m| {"_id" => m["_id"], "host" => mapping[m["host"]]} }
         config['version'] += 1
         
-        rs_connection = Mongo::ReplSetConnection.new( *old_members.collect{ |m| m.split(":") })
+        rs_connection = Mongo::ReplSetConnection.new(old_members)
         admin = rs_connection['admin']
         cmd = BSON::OrderedHash.new
         cmd['replSetReconfig'] = config
@@ -115,20 +127,33 @@ class Chef::ResourceDefinitionList::MongoDB
           Chef::Log.info("New config successfully applied: #{config.inspect}")
         end
         if !result.nil?
-          Chef::Log.error("configuring replicaset returned: #{result.inspect}")
+          Chef::Log.error("1configuring replicaset returned: #{result.inspect}")
         end
       else
+        rs_members_map = {}
+        rs_members.each do |m|
+          host = m['host']
+          rs_members_map[host] = m
+        end
+
         # remove removed members from the replicaset and add the new ones
         max_id = config['members'].collect{ |member| member['_id']}.max
-        rs_members.collect!{ |member| member['host'] }
+
         config['version'] += 1
+
         old_members = config['members'].collect{ |member| member['host'] }
-        members_delete = old_members - rs_members        
+        members_delete = old_members - rs_members_map.keys        
         config['members'] = config['members'].delete_if{ |m| members_delete.include?(m['host']) }
-        members_add = rs_members - old_members
+        members_add = rs_members_map.keys - old_members
         members_add.each do |m|
           max_id += 1
-          config['members'] << {"_id" => max_id, "host" => m}
+          config['members'] << rs_members_map[m].merge({"_id" => max_id, "host" => m})
+        end
+
+        config['members'].each do |m|
+          rs_members_map[m['host']].each do |k,v|
+            m[k]=v unless k=="_id" or v.nil?
+          end
         end
 
         rs_connection = Mongo::ReplSetConnection.new(old_members)
@@ -136,7 +161,7 @@ class Chef::ResourceDefinitionList::MongoDB
         
         cmd = BSON::OrderedHash.new
         cmd['replSetReconfig'] = config
-        
+
         result = nil
         begin
           result = admin.command(cmd, :check_response => false)
@@ -147,7 +172,7 @@ class Chef::ResourceDefinitionList::MongoDB
           Chef::Log.info("New config successfully applied: #{config.inspect}")
         end
         if !result.nil?
-          Chef::Log.error("configuring replicaset returned: #{result.inspect}")
+          Chef::Log.error("2configuring replicaset returned: #{result.inspect}")
         end
       end
     elsif !result.fetch("errmsg", nil).nil?
