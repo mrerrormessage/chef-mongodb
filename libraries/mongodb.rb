@@ -82,7 +82,7 @@ class Chef::ResourceDefinitionList::MongoDB
         "_id" => name,
         "members" => rs_members
     }
-    
+
     begin
       result = admin.command(cmd, :check_response => false)
     rescue Mongo::OperationTimeout
@@ -127,7 +127,7 @@ class Chef::ResourceDefinitionList::MongoDB
           Chef::Log.info("New config successfully applied: #{config.inspect}")
         end
         if !result.nil?
-          Chef::Log.error("1configuring replicaset returned: #{result.inspect}")
+          Chef::Log.error("configuring replicaset returned : #{result.inspect}")
         end
       else
         rs_members_map = {}
@@ -161,7 +161,6 @@ class Chef::ResourceDefinitionList::MongoDB
         
         cmd = BSON::OrderedHash.new
         cmd['replSetReconfig'] = config
-
         result = nil
         begin
           result = admin.command(cmd, :check_response => false)
@@ -172,7 +171,11 @@ class Chef::ResourceDefinitionList::MongoDB
           Chef::Log.info("New config successfully applied: #{config.inspect}")
         end
         if !result.nil?
-          Chef::Log.error("2configuring replicaset returned: #{result.inspect}")
+          if result.fetch("ok", nil) == 1
+            Chef::Log.info("Configuring replicaset returned: #{result.inspect}")
+          else
+            Chef::Log.error("Configuring replicaset returned: #{result.inspect}")
+          end
         end
       end
     elsif !result.fetch("errmsg", nil).nil?
