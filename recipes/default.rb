@@ -21,6 +21,7 @@
 
 package node[:mongodb][:package_name] do
   action :install
+  version node[:mongodb][:package_version]
 end
 
 needs_mongo_gem = (node.recipes.include?("mongodb::replicaset") or node.recipes.include?("mongodb::mongos"))

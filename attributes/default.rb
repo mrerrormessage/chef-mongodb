@@ -42,6 +42,8 @@ default[:mongodb][:init_dir] = "/etc/init.d"
 
 default[:mongodb][:init_script_template] = "mongodb.init.erb"
 
+default[:mongodb][:package_version] = '2.4.8'
+
 case node['platform']
 when "freebsd"
   default[:mongodb][:defaults_dir] = "/etc/rc.conf.d"
